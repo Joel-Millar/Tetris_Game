@@ -1,0 +1,1220 @@
+Imports System.Data.OleDb
+Public Class TetrisGame
+
+    Public UserID As String = ""
+    Dim stack As New Stack
+    Dim controlPlayer As New Player
+    Dim players(1000) As Player
+    Dim gOver As Boolean = False
+    Dim undoCount As Integer = 10
+    Dim blockNumber As Integer = 1
+    Public randomNumber As Integer
+    Public scoreCount As Integer = 0
+    Dim movesMade As Integer = 0
+    Dim Game As New Game
+
+    'Runs as soon as the Form Loads
+    Public Sub TetrisGame_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        Me.BackColor = Color.Black
+        Me.WindowState = FormWindowState.Maximized
+
+        bubbleSort(players)
+
+        If SignUp.playerID = Nothing Then
+            UserID = LogIn.playerID
+        ElseIf LogIn.playerID = Nothing Then
+            UserID = (SignUp.playerID)
+        End If
+
+        controlPlayer.addBorders()
+        Game.createPlayers(players, controlPlayer)
+        Game.displayDetails(scoreCount, movesMade, undoCount)
+        Game.displayLeaderBoard()
+    End Sub
+    'Constant ticks that move the block down and updates labels runtime
+    Private Sub Timer1_Tick(ByVal sender As Object, ByVal e As EventArgs) Handles Timer1.Tick
+        Timer1.Interval = Game.fallspeed
+        gameEnd(sender, e)
+        Game.fallspeed()
+        players(blockNumber).playerSpeedTick(sender, e, players(blockNumber))
+        Game.showScore.Text = scoreCount
+        Game.showMoves.Text = movesMade
+        Game.undoCountNumber.Text = undoCount
+    End Sub
+    'Checks if the user loses at the game
+    Private Sub gameEnd(ByVal sender As Object, ByVal e As EventArgs)
+        Try
+            For i = 1 To 1000
+                If players(blockNumber).Bounds.IntersectsWith(players(i).Bounds) And players(blockNumber).Top <= 76 And players(blockNumber).Name <> players(i).Name And players(i).Visible = True Then
+                    showGameOver()
+                    Me.Close()
+                End If
+            Next
+        Catch ex As Exception
+
+        End Try
+    End Sub
+    'Updates the high score of the user and shows the gameover form
+    Private Sub showGameOver()
+
+        Dim pro As String
+        Dim connstring As String
+        Dim command As String
+        Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+        pro = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb"
+        connstring = pro
+        myConnection.ConnectionString = connstring
+        myConnection.Open()
+        command = "UPDATE Table1 SET Highscore = '" & scoreCount & "' WHERE ID = " & UserID & ""
+        Dim cmd As OleDbCommand = New OleDbCommand(command, myConnection)
+        cmd.Parameters.Add(New OleDbParameter("Highscore", CType(scoreCount, String)))
+        cmd.Parameters.Add(New OleDbParameter("ID", CType(UserID, String)))
+
+        Try
+            cmd.ExecuteNonQuery()
+            cmd.Dispose()
+            myConnection.Close()
+
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        End Try
+
+        GameOver.Show()
+
+    End Sub
+    'recursively adds to the score each time block lands 
+    Private Sub addScore()
+        scoreCount += 8
+        If players(blockNumber).playerHitBottom(players(blockNumber)) = True Then
+            addScore()
+        End If
+    End Sub
+Bubble Sort
+    'performs a bubble sort
+    Sub bubbleSort(ByVal theArray As Object)
+        For i = 1 To theArray.Length - 1
+            If i + 1 < theArray.Length Then
+                If theArray(i) > theArray(i + 1) Then
+                    Swap(theArray, i, i + 1)
+                    bubbleSort(theArray)
+                End If
+            End If
+        Next
+    End Sub
+    'swaps the paramaters around in the array
+    Sub Swap(ByVal array() As Integer, ByVal first As Integer, ByVal second As Integer)
+        Dim swapper As Integer
+        swapper = array(first)
+        array(first) = array(second)
+        array(second) = swapper
+    End Sub
+
+    Dim midd As Integer = 500
+    Dim count As Integer = 0
+    'checks if a row is full, removes the blocks and moves all blocks above down. Adds to the score
+    Private Sub checkForRemove(ByVal sender As Object, ByVal playerE As KeyEventArgs) Handles MyBase.KeyDown
+        Dim theWidth As Integer = 0
+        Dim theHeight As Integer = 0
+
+        Try
+            theHeight = players(blockNumber - 1).Top
+        Catch ex As Exception
+        End Try
+
+        For i = 1 To 1000
+            If players(i).Top = theHeight And players(i).Visible = True Then
+                theWidth += players(i).Width
+            End If
+        Next
+
+        If theWidth >= 250 Then
+            For i = 1 To 1000
+                If players(i).Top = theHeight Then
+                    players(i).Visible = False
+                    scoreCount += 10
+                ElseIf players(i).Visible = True And players(i).Visible = True And players(i).Top < theHeight And i < blockNumber Then
+                    For j = 1 To 1
+                        players(i).Top += 25
+                    Next
+                End If
+            Next
+
+        End If
+
+    End Sub
+    'checks if the block has reached the bottom of the playing area
+    Private Sub primarybottomDetect(ByVal sender As Object, ByVal playerE As KeyEventArgs) Handles MyBase.KeyDown
+        controlPlayer.CollisionDetect(sender, playerE, controlPlayer)
+
+        spawnNewBlock(sender, playerE)
+
+        If players(blockNumber).playerHitBottom(players(blockNumber)) = True Then
+            blockNumber += 1
+            movesMade += 1
+            spawnNewBlock(sender, playerE)
+        End If
+    End Sub
+Spawn New Block
+    'spawns a new block when another block stops
+    Private Sub spawnNewBlock(ByVal sender As System.Object, ByVal playerE As KeyEventArgs)
+        players(blockNumber + 1).Top = 50
+        Me.Controls.Add(players(blockNumber))
+        players(blockNumber).Visible = True
+        players(blockNumber).TetrisGame_KeyDown(sender, playerE, players(blockNumber))
+        players(blockNumber).CollisionDetect(sender, playerE, players(blockNumber))
+
+        If players(blockNumber).playerHitBottom(players(blockNumber)) = True Then
+            blockNumber += 1
+            movesMade += 1
+            stack.stackPush(stack.stackArray, players(blockNumber - 1).Name)
+            spawnNewBlock(sender, playerE)
+        End If
+        randomNum()
+    End Sub
+    'generates a random number
+    Sub randomNum()
+        randomNumber = Int((7 * Rnd()) + 1)
+
+        Select Case randomNumber
+            Case 1
+                players(blockNumber).BackColor = Color.Cyan
+            Case 2
+                players(blockNumber).BackColor = Color.Yellow
+            Case 3
+                players(blockNumber).BackColor = Color.Purple
+            Case 4
+                players(blockNumber).BackColor = Color.Green
+            Case 5
+                players(blockNumber).BackColor = Color.Blue
+            Case 6
+                players(blockNumber).BackColor = Color.Red
+            Case 7
+                players(blockNumber).BackColor = Color.Orange
+        End Select
+    End Sub
+    'checks if a block lands on another block then stops it
+    Private Sub blockCollisionDetect(ByVal sender As Object, ByVal e As EventArgs) Handles MyBase.KeyDown
+        For Each stoppedBlock As PictureBox In players
+            If players(blockNumber) IsNot Nothing And stoppedBlock IsNot Nothing Then
+                If players(blockNumber).Bounds.IntersectsWith(stoppedBlock.Bounds) And stoppedBlock.Visible = True And players(blockNumber).Visible = True Then
+                    If stoppedBlock IsNot players(blockNumber) Then
+                        If stoppedBlock.Visible = True And players(blockNumber).Visible = True Then
+                            blockNumber += 1
+                            players(blockNumber - 1).Top = stoppedBlock.Top - players(blockNumber - 1).Height
+                            addScore()
+                            movesMade += 1
+                            stack.stackPush(stack.stackArray, players(blockNumber - 1).Name)
+                        End If
+                    End If
+                End If
+            End If
+        Next
+    End Sub
+Undo Block
+    'removes the last block on top of the stack, then removes it from the stack
+    Private Sub UndoBlock(ByVal sender As Object, ByVal playerE As KeyEventArgs) Handles MyBase.KeyDown
+        Dim blockName As String = stack.stackPeek(stack.stackArray)
+        If playerE.KeyCode = Keys.U Then
+            If undoCount > 0 Then
+                For i = 1 To 1000
+                    If players(i).Name = blockName Then
+                        scoreCount -= 20
+                        undoCount -= 1
+                        stack.stackPop(stack.stackArray)
+                        players(i).Visible = False
+                    End If
+                Next
+            End If
+        End If
+    End Sub
+    'stops blocks glitching below the bottom border
+    Private Sub checkNotBelow(ByVal sender As Object, ByVal e As EventArgs) Handles MyBase.KeyDown
+        For i = 1 To 1000
+            If players(i).Top > 880 Then
+                players(i).BackColor = Color.Black
+            End If
+        Next
+    End Sub
+End Class
+
+Game
+Class Game
+    Inherits Control
+
+    Public showScore As New Label
+    Public showMoves As New Label
+    Public undoCountNumber As New Label
+    Private movesMade As Integer
+    Private fallingSpeed As Integer = 0
+    'Controls the speed the player falls at
+    Public Function fallspeed()
+        If movesMade <= 10 Then
+            Return 920
+        ElseIf movesMade > 10 And movesMade <= 20 Then
+            Return 720
+        ElseIf movesMade > 20 And movesMade < 100 Then
+            Return 460
+        Else
+            Return 200
+        End If
+    End Function
+    'creates the players and determines their size based off a random number
+    Public Sub createPlayers(ByVal players() As Player, ByVal controlPlayer As Player)
+        Dim randomInteger As Integer
+        controlPlayer.Left = 0
+        controlPlayer.Top = 0
+        controlPlayer.basePlayerSize(controlPlayer)
+        controlPlayer.BackColor = Color.Black
+        controlPlayer.Visible = False
+        MyBase.Controls.Add(controlPlayer)
+
+        For i = 1 To 1000
+            randomInteger = Int((4 * Rnd()) + 1)
+            players(i) = New Player
+            players(i).Name = "newPlayer" + Str(i)
+            players(i).Tag = i
+            players(i).Visible = False
+            players(i).BackColor = Color.Red
+            players(i).Left = 850
+            players(i).Top = 50
+
+            If randomInteger = 1 Then
+                players(i).longHori(players(i))
+            ElseIf randomInteger = 2 Then
+                players(i).largeSq(players(i))
+            ElseIf randomInteger = 3 Then
+                players(i).basePlayerSize(players(i))
+            ElseIf randomInteger = 4 Then
+                players(i).shortHori(players(i))
+            End If
+        Next
+    End Sub
+    'Shows the labels containing key infomation
+    Public Sub displayDetails(ByVal scoreCount As Integer, ByVal movesMade As Integer, ByVal undoCountN As Integer)
+        Dim scoreText As New Label
+        scoreText.AutoSize = True
+        scoreText.BackColor = Color.Black
+        scoreText.ForeColor = Color.White
+        scoreText.Top = 25
+        scoreText.Left = 1200
+        scoreText.Text = "SCORE:"
+        scoreText.Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        TetrisGame.Controls.Add(scoreText)
+
+        showScore.BackColor = Color.Black
+        showScore.ForeColor = Color.White
+        showScore.Text = Str(scoreCount)
+        showScore.AutoSize = True
+        showScore.Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        showScore.Top = 25
+        showScore.Left = 1377
+        TetrisGame.Controls.Add(showScore)
+
+        Dim MovesText As New Label
+        MovesText.AutoSize = True
+        MovesText.BackColor = Color.Black
+        MovesText.ForeColor = Color.White
+        MovesText.Top = 125
+        MovesText.Left = 1200
+        MovesText.Text = "MOVES MADE:"
+        MovesText.Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        TetrisGame.Controls.Add(MovesText)
+
+        showMoves.BackColor = Color.Black
+        showMoves.ForeColor = Color.White
+        showMoves.Text = Str(movesMade)
+        showMoves.AutoSize = True
+        showMoves.Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        showMoves.Top = 125
+        showMoves.Left = 1550
+        TetrisGame.Controls.Add(showMoves)
+
+        Dim undoCount As New Label
+        With undoCount
+            .AutoSize = True
+            .BackColor = Color.Black
+            .ForeColor = Color.White
+            .Top = 175
+            .Left = 1200
+            .Text = "UNDO COUNT"
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        End With
+        TetrisGame.Controls.Add(undoCount)
+
+        With undoCountNumber
+            .AutoSize = True
+            .BackColor = Color.Black
+            .ForeColor = Color.White
+            .Top = 175
+            .Left = 1200 + undoCount.Width
+            .Text = Str(undoCountN)
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+        End With
+        TetrisGame.Controls.Add(undoCountNumber)
+
+    End Sub
+Leader Board
+    'gets the highscores and usernames from the database and displays it in the labels
+    Public Sub displayLeaderBoard()
+        Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+        Dim playerHighScores(3) As String
+        Dim playerUsernames(3) As String
+        Dim leaderboard As New Label
+        Dim leaderBoard1 As New Label
+        Dim leaderBoard2 As New Label
+        Dim leaderBoard3 As New Label
+
+        With leaderboard
+            .Text = "LEADERBOARD:"
+            .ForeColor = Color.White
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+            .Left = 50
+            .Top = 20
+            .AutoSize = True
+        End With
+
+        With leaderBoard1
+            .ForeColor = Color.White
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+            .Left = 50
+            .Top = 70
+            .AutoSize = True
+        End With
+
+        With leaderBoard2
+            .ForeColor = Color.White
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+            .Left = 50
+            .Top = leaderBoard1.Top + leaderBoard2.Height + 20
+            .AutoSize = True
+        End With
+
+        With leaderBoard3
+            .ForeColor = Color.White
+            .Font = New Font("ARIAL BLACK", 30, FontStyle.Bold)
+            .Left = 50
+            .Top = leaderBoard2.Top + leaderBoard3.Height + 20
+            .AutoSize = True
+        End With
+
+        TetrisGame.Controls.Add(leaderboard)
+        TetrisGame.Controls.Add(leaderBoard1)
+        TetrisGame.Controls.Add(leaderBoard2)
+        TetrisGame.Controls.Add(leaderBoard3)
+
+        Dim DataGridView1 As New DataGridView
+        With DataGridView1
+            .Top = 0
+            .Left = 0
+            .Size = New Size(1, 1)
+            .Enabled = True
+            .Visible = False
+        End With
+        TetrisGame.Controls.Add(DataGridView1)
+
+        Try
+            myConnection.Open()
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        Finally
+            myConnection.Close()
+
+        End Try
+
+        Try
+            Dim sql As String
+            Dim cmd As New OleDb.OleDbCommand
+            Dim dt As New DataTable
+            Dim da As New OleDb.OleDbDataAdapter
+            myConnection.Open()
+            sql = "Select Highscore, Username from Table1 Order by Highscore Desc"
+            cmd.Connection = myConnection
+            cmd.CommandText = sql
+            da.SelectCommand = cmd
+
+            da.Fill(dt)
+
+            DataGridView1.DataSource = dt
+            Dim num As Integer = 2
+restart:
+            Try
+                For i = 0 To num
+                    playerHighScores(i) = DataGridView1.Rows(i).Cells(0).Value.ToString
+                    playerUsernames(i) = DataGridView1.Rows(i).Cells(1).Value.ToString
+                Next
+            Catch ex As Exception
+                num -= 1
+                GoTo Restart
+            End Try
+
+            leaderBoard1.Text = playerHighScores(0) & " -- " & playerUsernames(0)
+            leaderBoard2.Text = playerHighScores(1) & " -- " & playerUsernames(1)
+            leaderBoard3.Text = playerHighScores(2) & " -- " & playerUsernames(2)
+
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        Finally
+            myConnection.Close()
+
+        End Try
+    End Sub
+    'stops the game
+    Private Sub stopGame()
+        'TetrisGame.Close()
+    End Sub
+
+
+End Class
+
+Player
+Class Player
+    Inherits PictureBox
+
+    Private blockType As Integer = Nothing
+    'sets player size to 25x25
+    Public Sub basePlayerSize(ByVal aplayer As PictureBox)
+        aplayer.Size = New Size(25, 25)
+        blockType = 1
+    End Sub
+    'sets player size to 100x25
+    Public Sub longHori(ByVal aPlayer As PictureBox)
+        aPlayer.Size = New Size(100, 25)
+        blockType = 2
+    End Sub
+    'sets player size to 50x50
+    Public Sub largeSq(ByVal aPlayer As PictureBox)
+        aPlayer.Size = New Size(50, 50)
+        blockType = 3
+    End Sub
+    'sets player size to 50x25
+    Public Sub shortHori(ByVal aPlayer As PictureBox)
+        aPlayer.Size = New Size(50, 25)
+        blockType = 4
+    End Sub
+    'returns an integer that represents the block size
+    Public Function returnBlocktype(ByVal aPlayer As PictureBox)
+        Return blockType
+    End Function
+
+    Private PHB As Boolean = False
+    'returns true if the player has hit the bottom of the playing space
+    Public Property playerHitBottom(ByVal aPlayer As PictureBox)
+        Get
+            If aPlayer.Top >= 875 Then
+                PHB = True
+                aPlayer.Top = 900 - aPlayer.Height '875
+            End If
+            Return PHB
+        End Get
+        Set(ByVal value)
+            value = PHB
+        End Set
+    End Property
+
+    Public sideborders(2) As PictureBox
+    Public topborders(2) As PictureBox
+    'adds the picturebox borders to the tetris form
+    Public Sub addBorders()
+        For limits = 1 To 2
+
+            Dim sideborder As New PictureBox
+            sideborder.Size = New Size(25, 900)
+            sideborder.BackColor = Color.White
+            sideborder.Top = 25
+            sideborder.Left = 725
+            sideborders(limits) = sideborder
+
+            If limits = 2 Then
+                sideborder.Left = 1000 ' + 275 from limits 1
+            End If
+            TetrisGame.Controls.Add(sideborders(limits))
+        Next
+
+        For limits = 1 To 2
+            Dim topborder As New PictureBox
+            topborder.Top = 25
+            topborder.Size = New Size(300, 25)
+            topborder.BackColor = Color.White
+            topborder.Left = 725
+            topborders(limits) = topborder
+            If limits = 2 Then
+                topborder.Top = 900
+            End If
+            TetrisGame.Controls.Add(topborders(limits))
+        Next
+    End Sub
+    'handles when a key is pressed the direction the block moves
+    Public Sub TetrisGame_KeyDown(ByVal sender As System.Object, ByVal playerE As System.Windows.Forms.KeyEventArgs, ByVal aPlayer As PictureBox)
+
+        If playerE.KeyCode = Keys.S Then
+            aPlayer.Top += playerSpeed()
+        End If
+
+        If playerE.KeyCode = Keys.A Then
+            aPlayer.Left -= playerSpeed()
+        End If
+
+        If playerE.KeyCode = Keys.W Then
+            aPlayer.Top = 50
+            aPlayer.Left = 850
+        End If
+
+        If playerE.KeyCode = Keys.D Then
+            aPlayer.Left += playerSpeed()
+        End If
+
+        If playerE.KeyCode = Keys.R Then
+            'Rotate Block
+        End If
+
+    End Sub
+    'stops the block passing through the borders
+    Public Sub CollisionDetect(ByVal sender As Object, ByVal playerE As KeyEventArgs, ByVal aPlayer As PictureBox)
+
+        If aPlayer.Left >= 1000 - aPlayer.Width Then ' 975
+            aPlayer.Left = 1000 - aPlayer.Width '975
+        End If
+
+        If aPlayer.Left <= 750 Then
+            aPlayer.Left = 750
+        End If
+
+    End Sub
+    ''distance the player moves down
+    Public Sub playerSpeedTick(ByVal sender As Object, ByVal e As EventArgs, ByVal aPlayer As PictureBox)
+        aPlayer.Top += 24
+    End Sub
+    'Distance the block moves with each key press
+    Overridable Function playerSpeed()
+        Return 25
+    End Function
+
+End Class
+
+Stack
+Class Stack
+    Inherits Game
+    Public stackArray(1000) As String
+    Public pointer As Integer = 1
+    Private stackLimit As Integer = stackArray.Length - 1
+    'Returns the top value on the stack
+    Public Function stackPeek(ByVal stack() As String)
+        Try
+            Return (stack(pointer))
+        Catch ex As Exception
+            MsgBox("Stack Overflow")
+        End Try
+    End Function
+    'deletes the top value on the stack
+    Public Sub stackPop(ByVal stack() As String)
+        If pointer - 1 < 0 Then
+            MsgBox("Stack Underflow")
+        Else
+            pointer -= 1
+        End If
+    End Sub
+    'adds a input to the stack
+    Public Sub stackPush(ByVal stack() As String, ByVal Input As String)
+        Try
+            pointer += 1
+            stack(pointer) = Input
+        Catch ex As Exception
+            MsgBox("Stack Overflow")
+        End Try
+    End Sub
+End Class
+
+SignUp
+Imports System.Data.OleDb
+Public Class SignUp
+    Public savedUsername As String = ""
+    Public playerID As String = ""
+    Private Sub Form2_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        ControlBox = False
+        WindowState = FormWindowState.Maximized
+        Me.BackColor = Color.Black
+
+        displayOptions()
+    End Sub
+
+    Dim pro As String
+    Dim connstring As String
+    Dim command As String
+    Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+    Dim key As Integer = 8
+    Private savedPassword As String
+    Private usernameInput As New TextBox
+    Private passwordInput As New TextBox
+    Private complete As New Button
+    Private validUser As Boolean = False
+    Private validPass As Boolean = False
+
+    Public Sub displayOptions()
+
+        Dim welcome As New Label
+        welcome.Left = 250
+        welcome.Top = 50
+        welcome.Text = "Welcome New User"
+        welcome.Font = New Font("ARIAL BLACK", 25, FontStyle.Bold)
+        welcome.AutoSize = True
+        welcome.ForeColor = Color.White
+        Me.Controls.Add(welcome)
+
+        usernameInput.Left = 250
+        usernameInput.Top = 100
+        usernameInput.Text = "ENTER USERNAME"
+        usernameInput.Font = New Font("ARIAL BLACK", 15, FontStyle.Regular)
+        usernameInput.AutoSize = True
+        usernameInput.Width = 250
+        Me.Controls.Add(usernameInput)
+
+        passwordInput.Left = 250
+        passwordInput.Top = 150
+        passwordInput.Text = "ENTER PASSWORD"
+        passwordInput.Font = New Font("ARIAL BLACK", 15, FontStyle.Regular)
+        passwordInput.AutoSize = True
+        passwordInput.Width = 250
+        Me.Controls.Add(passwordInput)
+
+        Dim exitForm As New Button
+        exitForm.Size = New Size(250, 75)
+        exitForm.Left = 250
+        exitForm.Top = 275
+        exitForm.Text = "Exit"
+        exitForm.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        exitForm.BackColor = Color.Red
+        Me.Controls.Add(exitForm)
+        AddHandler exitForm.Click, AddressOf exitTheForm
+
+        complete.Size = New Size(250, 75)
+        complete.Left = 250
+        complete.Top = 200
+        complete.Text = "DONE"
+        complete.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        complete.BackColor = Color.LightGreen
+        Me.Controls.Add(complete)
+        AddHandler complete.Click, AddressOf CheckUsername
+        AddHandler complete.Click, AddressOf CheckPassword
+        AddHandler complete.Click, AddressOf checkToAdd
+
+    End Sub
+
+    Private Sub CheckUsername()
+        Dim userChecker As Boolean = False
+
+        If usernameInput.Text = "ENTER USERNAME" Then
+            validUser = False
+            MsgBox("*Username Required*")
+            usernameInput.BackColor = Color.Red
+        End If
+
+        If usernameInput.Text.Length < 5 Then
+            validUser = False
+            MsgBox("*Username too Short*")
+            usernameInput.Text = "ENTER USERNAME"
+            usernameInput.BackColor = Color.Red
+        End If
+
+        If usernameInput.Text <> "ENTER USERNAME" And usernameInput.Text.Length >= 5 Then
+            validUser = True
+            savedUsername = usernameInput.Text
+        End If
+
+    End Sub
+
+    Private Sub CheckPassword()
+
+        If passwordInput.Text = "ENTER PASSWORD" Then
+            validPass = False
+            MsgBox("*Username Required*")
+            passwordInput.BackColor = Color.Red
+        End If
+
+        If passwordInput.Text.Length < 5 Then
+            validPass = False
+            MsgBox("*Password too Short*")
+            passwordInput.Text = "ENTER PASSWORD"
+            passwordInput.BackColor = Color.Red
+        End If
+
+        If passwordInput.Text <> "ENTER PASSWORD" And passwordInput.Text.Length >= 5 Then
+            validPass = True
+            savedPassword = passwordInput.Text
+        End If
+    End Sub
+Encryption / Decryption
+    Dim theEncryptedPassword As String
+    Function encryptData()
+
+        Try
+            Dim encryptedPassword As String
+            'Takes String splits to characters then Converts to unicode/ASCII 
+            Dim passwordChar() As Char = savedPassword.ToCharArray
+            Dim unicodeValues(passwordChar.Length) As Integer
+            For i = 0 To passwordChar.Length - 1
+                unicodeValues(i) = Asc(passwordChar(i))
+            Next
+            'Perform Function Based on key
+            Dim finalChange(unicodeValues.Length) As Integer
+            Dim finalPasswordChar(passwordChar.Length) As Char
+            'Change unicode/ascii to random number 
+            For i = 0 To unicodeValues.Length - 1
+                finalChange(i) = unicodeValues(i) Xor key
+            Next
+            'change integer to char
+            For i = 0 To passwordChar.Length - 1
+                finalPasswordChar(i) = Chr(finalChange(i))
+            Next
+
+            'Reform array of char(finalPasswordChar) as string
+            encryptedPassword = New String(finalPasswordChar)
+            theEncryptedPassword = encryptedPassword
+            theEncryptedPassword = theEncryptedPassword.Remove(theEncryptedPassword.Length - 1, 1)
+            Return theEncryptedPassword
+            checkToAdd()
+        Catch ex As Exception
+
+        End Try
+
+    End Function
+
+    Public Sub exitTheForm()
+        Me.Close()
+    End Sub
+Get User ID
+    Private Function getID()
+        Dim pro As String = ""
+        Dim connstring As String = ""
+        Dim command As String = ""
+        Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+
+        Dim DataGridView2 As New DataGridView
+        With DataGridView2
+            .Top = 18
+            .Left = 388
+            .AutoSize = True
+            .Enabled = True
+            .Visible = False
+        End With
+        Me.Controls.Add(DataGridView2)
+
+        Try
+            myConnection.Open()
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        Finally
+            myConnection.Close()
+
+        End Try
+
+        Dim sql As String
+        Dim cmd As New OleDb.OleDbCommand
+        Dim dt As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        myConnection.Open()
+        sql = "Select ID From Table1 WHERE Username = '" & savedUsername & "'"
+        cmd.Connection = myConnection
+        cmd.CommandText = sql
+        da.SelectCommand = cmd
+
+        da.Fill(dt)
+
+        DataGridView2.DataSource = dt
+
+        playerID = DataGridView2.Rows(0).Cells(0).Value.ToString
+
+        Return playerID
+
+    End Function
+
+    Private Sub checkToAdd()
+        If validPass = True And validUser = True Then
+            encryptData()
+            addToDatabase()
+        End If
+    End Sub
+Add User to database
+    Public Sub addToDatabase()
+        Dim highScore As Integer = Nothing
+
+        pro = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb"
+        connstring = pro
+        myConnection.ConnectionString = connstring
+        myConnection.Open()
+        command = "INSERT INTO [Table1] ([Username], [Password], [Highscore]) VALUES ('" & savedUsername & "','" & encryptData() & "','" & highScore & "')"
+        Dim cmd As OleDbCommand = New OleDbCommand(command, myConnection)
+        cmd.Parameters.Add(New OleDbParameter("Username", CType(savedUsername, String)))
+        cmd.Parameters.Add(New OleDbParameter("Password", CType(theEncryptedPassword, String)))
+        cmd.Parameters.Add(New OleDbParameter("Highscore", CType(highScore, String)))
+
+        Try
+            cmd.ExecuteNonQuery()
+            cmd.Dispose()
+            myConnection.Close()
+            MsgBox("ACCOUNT CREATED")
+            playerID = getID()
+            TetrisGame.Show()
+
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        End Try
+    End Sub
+End Class
+
+LogIn
+Imports System.Data.OleDb
+Public Class LogIn
+    Public playerID As String = ""
+    Public userNames(50) As String
+    Dim passwords(50) As String
+
+    Private Sub Form3_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        ControlBox = False
+        WindowState = FormWindowState.Maximized
+        Me.BackColor = Color.Black
+
+        displayOptions()
+        CheckWithDatabase()
+    End Sub
+Get Usernames and Passwords From Database
+    Private Sub CheckWithDatabase()
+        Dim pro As String = ""
+        Dim connstring As String = ""
+        Dim command As String = ""
+        Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+
+        Dim DataGridView1 As New DataGridView
+        With DataGridView1
+            .Top = 18
+            .Left = 388
+            .AutoSize = True
+            .Enabled = True
+            .Visible = False
+        End With
+        Me.Controls.Add(DataGridView1)
+
+        Try
+            myConnection.Open()
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        Finally
+            myConnection.Close()
+
+        End Try
+
+        Try
+            Dim sql As String
+            Dim cmd As New OleDb.OleDbCommand
+            Dim dt As New DataTable
+            Dim da As New OleDb.OleDbDataAdapter
+            myConnection.Open()
+            sql = "Select Username, Password From Table1"
+            cmd.Connection = myConnection
+            cmd.CommandText = sql
+            da.SelectCommand = cmd
+
+            da.Fill(dt)
+
+            DataGridView1.DataSource = dt
+            Dim num As Integer = 1
+            For i = 0 To num
+                userNames(i) = DataGridView1.Rows(i).Cells(0).Value.ToString
+            Next
+
+            For j = 0 To num
+                passwords(j) = encryptData(DataGridView1.Rows(j).Cells(1).Value.ToString)
+            Next
+
+        Catch ex As Exception
+
+        Finally
+            myConnection.Close()
+
+        End Try
+    End Sub
+
+    Private Function getID()
+        Dim pro As String = ""
+        Dim connstring As String = ""
+        Dim command As String = ""
+        Dim myConnection As New OleDb.OleDbConnection("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\0_School\A-Level\Cmp Sci\0_Coursework\DataBase\PlayersDataBase1.accdb")
+
+
+        Dim DataGridView2 As New DataGridView
+        With DataGridView2
+            .Top = 18
+            .Left = 388
+            .AutoSize = True
+            .Enabled = True
+            .Visible = False
+        End With
+        Me.Controls.Add(DataGridView2)
+
+        Try
+            myConnection.Open()
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        Finally
+            myConnection.Close()
+
+        End Try
+
+        Dim sql As String
+        Dim cmd As New OleDb.OleDbCommand
+        Dim dt As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        myConnection.Open()
+        sql = "Select ID From Table1 WHERE Username = '" & savedUsername & "'"
+        cmd.Connection = myConnection
+        cmd.CommandText = sql
+        da.SelectCommand = cmd
+
+        da.Fill(dt)
+
+        DataGridView2.DataSource = dt
+
+        playerID = DataGridView2.Rows(0).Cells(0).Value.ToString
+
+        Return playerID
+
+    End Function
+
+
+    Private usernameEnter As New TextBox
+    Private passwordEnter As New TextBox
+    Public savedUsername As String
+    Private savedPassword As String
+    Private validuser As Boolean = False
+    Private validpass As Boolean = False
+
+    Public Sub displayOptions()
+        Dim welcome As New Label
+        welcome.Left = 250
+        welcome.Top = 50
+        welcome.Text = "Welcome Existing User"
+        welcome.Font = New Font("ARIAL BLACK", 25, FontStyle.Bold)
+        welcome.AutoSize = True
+        welcome.ForeColor = Color.White
+        Me.Controls.Add(welcome)
+
+        usernameEnter.Left = 250
+        usernameEnter.Top = 100
+        usernameEnter.Text = "ENTER USERNAME"
+        usernameEnter.Font = New Font("ARIAL BLACK", 15, FontStyle.Regular)
+        usernameEnter.AutoSize = True
+        usernameEnter.Width = 250
+        Me.Controls.Add(usernameEnter)
+
+        passwordEnter.Left = 250
+        passwordEnter.Top = 150
+        passwordEnter.Text = "ENTER PASSWORD"
+        passwordEnter.Font = New Font("ARIAL BLACK", 15, FontStyle.Regular)
+        passwordEnter.AutoSize = True
+        passwordEnter.Width = 250
+        Me.Controls.Add(passwordEnter)
+
+        Dim exitForm As New Button
+        exitForm.Size = New Size(250, 75)
+        exitForm.Left = 250
+        exitForm.Top = 275
+        exitForm.Text = "Exit"
+        exitForm.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        exitForm.BackColor = Color.Red
+        Me.Controls.Add(exitForm)
+        AddHandler exitForm.Click, AddressOf exitTheForm
+
+        Dim complete As New Button
+        complete.Size = New Size(250, 75)
+        complete.Left = 250
+        complete.Top = 200
+        complete.Text = "DONE"
+        complete.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        complete.BackColor = Color.LightGreen
+        Me.Controls.Add(complete)
+        AddHandler complete.Click, AddressOf CheckUsername
+        AddHandler complete.Click, AddressOf CheckPassword
+        AddHandler complete.Click, AddressOf checkPlayer
+
+    End Sub
+
+    Public Sub exitTheForm()
+        Me.Close()
+    End Sub
+
+    Private Sub CheckUsername()
+        Dim userChecker As Boolean = False
+
+        If usernameEnter.Text = "ENTER USERNAME" Then
+            validuser = False
+            MsgBox("*Username Required*")
+            usernameEnter.BackColor = Color.Red
+        End If
+
+        If usernameEnter.Text.Length < 5 Then
+            validuser = False
+            MsgBox("*Username too Short*")
+            usernameEnter.Text = "ENTER USERNAME"
+            usernameEnter.BackColor = Color.Red
+        End If
+
+        If usernameEnter.Text <> "ENTER USERNAME" And usernameEnter.Text.Length >= 5 Then
+            validuser = True
+            savedUsername = usernameEnter.Text
+        End If
+
+    End Sub
+
+    Private Sub CheckPassword()
+
+        If passwordEnter.Text = "ENTER PASSWORD" Then
+            validpass = False
+            MsgBox("*Password Required*")
+            passwordEnter.BackColor = Color.Red
+        End If
+
+        If passwordEnter.Text.Length < 5 Then
+            validpass = False
+            MsgBox("*Password too Short*")
+            passwordEnter.Text = "ENTER PASSWORD"
+            passwordEnter.BackColor = Color.Red
+        End If
+
+        If passwordEnter.Text <> "ENTER PASSWORD" And passwordEnter.Text.Length >= 5 Then
+            validpass = True
+            savedPassword = passwordEnter.Text
+        End If
+    End Sub
+
+
+    Public Function checkPlayer()
+        If validuser = True And validpass = True Then
+            For i = 0 To 5
+                For j = 0 To 5
+                    If userNames(i) = savedUsername And passwords(j) = savedPassword Then
+                        MsgBox("Welcome Back " & savedUsername)
+                        playerID = getID()
+                        TetrisGame.Show()
+                        Return True
+                    End If
+                Next
+            Next
+            MsgBox("INCORRECT USERNAME OR PASSWORD")
+            usernameEnter.Text = "ENTER USERNAME"
+            usernameEnter.BackColor = Color.Red
+            passwordEnter.Text = "ENTER PASSWORD"
+            passwordEnter.BackColor = Color.Red
+            Return False
+        End If
+    End Function
+
+    Dim key As Integer = 8
+
+    Function encryptData(ByVal data)
+        Try
+            Dim theEncryptedPassword As String
+            Dim encryptedPassword As String
+            'Takes String splits to characters then Converts to unicode/ASCII 
+            Dim passwordChar() As Char = data.ToCharArray
+            Dim unicodeValues(passwordChar.Length) As Integer
+            For i = 0 To passwordChar.Length - 1
+                unicodeValues(i) = Asc(passwordChar(i))
+            Next
+            'Perform Function Based on key
+            Dim finalChange(unicodeValues.Length) As Integer
+            Dim finalPasswordChar(passwordChar.Length) As Char
+            'Change unicode/ascii to random number 
+            For i = 0 To unicodeValues.Length - 1
+                finalChange(i) = unicodeValues(i) Xor key
+            Next
+            'change integer to char
+            For i = 0 To passwordChar.Length - 1
+                finalPasswordChar(i) = Chr(finalChange(i))
+            Next
+
+            'Reform array of char(finalPasswordChar) as string
+            encryptedPassword = New String(finalPasswordChar)
+            theEncryptedPassword = encryptedPassword
+            theEncryptedPassword = theEncryptedPassword.Remove(theEncryptedPassword.Length - 1, 1)
+            Return theEncryptedPassword
+        Catch ex As Exception
+        End Try
+    End Function
+End Class
+
+MainMenu
+MainMenu
+Public Class MainMenu
+    Public Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        ControlBox = False
+        WindowState = FormWindowState.Maximized
+        Me.BackColor = Color.Black
+
+        Dim startGame As New startMenu
+        startGame.displayMenu()
+
+    End Sub
+
+End Class
+
+StartMenu
+Class startMenu
+    Inherits Control
+
+    Public Sub displayMenu()
+        Dim title As New Label
+        title.ForeColor = Color.Red
+        title.Left = 250
+        title.Top = 40
+        title.Text = "TETRIS"
+        title.Font = New Font("ARIAL BLACK", 50, FontStyle.Regular)
+        title.AutoSize = True
+        MainMenu.Controls.Add(title)
+
+        Dim login As New Button
+        login.Text = "Log In"
+        login.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        login.Size = New Size(400, 100)
+        login.Top = 200
+        login.Left = 250
+        login.BackColor = Color.LightBlue
+        MainMenu.Controls.Add(login)
+        AddHandler login.Click, AddressOf userLogin
+
+        Dim signup As New Button
+        signup.Text = "Sign Up"
+        signup.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        signup.Size = New Size(400, 100)
+        signup.Top = 300
+        signup.Left = 250
+        signup.BackColor = Color.LightGreen
+        MainMenu.Controls.Add(signup)
+        AddHandler signup.Click, AddressOf userSignUp
+
+        Dim exitForm As New Button
+        exitForm.Text = "Exit"
+        exitForm.Font = New Font("ARIAL BLACK", 25, FontStyle.Regular)
+        exitForm.Top = 400
+        exitForm.Left = 250
+        exitForm.Size = New Size(400, 100)
+        exitForm.BackColor = Color.Red
+        MainMenu.Controls.Add(exitForm)
+        AddHandler exitForm.Click, AddressOf exitTheForm
+    End Sub
+
+    Private Sub userSignUp()
+        SignUp.Show()
+    End Sub
+
+    Private Sub userLogin()
+        LogIn.Show()
+    End Sub
+
+    Private Sub exitTheForm()
+        MainMenu.Close()
+    End Sub
+End Class
